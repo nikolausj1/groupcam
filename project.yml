@@ -1,0 +1,54 @@
+name: groupCam
+options:
+  bundleIdPrefix: com.levelup
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: 6A4J2GTB6F
+    SWIFT_VERSION: 6.0
+    SWIFT_STRICT_CONCURRENCY: minimal
+    TARGETED_DEVICE_FAMILY: 1
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+    CODE_SIGN_STYLE: Automatic
+targets:
+  groupCam:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    resources:
+      - path: Sources/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.levelup.groupcam
+        PRODUCT_NAME: groupCam
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: groupCam
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSCameraUsageDescription: groupCam uses the camera to take the two group photos you ask it to combine.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: Add the place where your group photos were taken to the saved images.
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: Save your selected originals and finished group photo to Apple Photos.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        SUPPORTS_MACCATALYST: NO
+    scheme:
+      testTargets:
+        - groupCamTests
+  groupCamTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: groupCam
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.levelup.groupcam.tests
+        GENERATE_INFOPLIST_FILE: YES
