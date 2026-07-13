@@ -13,6 +13,13 @@ enum CaptureLens: String, CaseIterable, Codable, Identifiable {
         case .ultraWide: "0.5×"
         }
     }
+
+    var baseMagnification: CGFloat {
+        switch self {
+        case .wide: 1
+        case .ultraWide: 0.5
+        }
+    }
 }
 
 enum SequenceLength: Int, CaseIterable, Codable, Identifiable {
@@ -72,6 +79,7 @@ struct FrameMetadata: Codable, Identifiable, Equatable {
     let pixelWidth: Int
     let pixelHeight: Int
     let lens: CaptureLens
+    let videoZoomFactor: Double?
     let motion: MotionSnapshot?
     let exposureDurationSeconds: Double?
     let iso: Float?
@@ -112,6 +120,7 @@ struct CapturedPair {
 
 struct CaptureConfigurationSnapshot: Codable, Equatable {
     let lens: CaptureLens
+    let videoZoomFactor: Double?
     let rotationAngleDegrees: Double
     let requestedMaxPhotoWidth: Int32
     let requestedMaxPhotoHeight: Int32

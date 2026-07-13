@@ -42,6 +42,66 @@ final class CaptureModelsTests: XCTestCase {
         XCTAssertEqual(pair.provisionalSideOne?.id, larger.id)
     }
 
+    func testCameraPreviewRotationMatchesInterfaceOrientation() {
+        XCTAssertEqual(CameraInterfaceRotation.angle(for: .portrait), 90)
+        XCTAssertEqual(CameraInterfaceRotation.angle(for: .landscapeRight), 0)
+        XCTAssertEqual(CameraInterfaceRotation.angle(for: .landscapeLeft), 180)
+        XCTAssertEqual(CameraInterfaceRotation.angle(for: .portraitUpsideDown), 270)
+        XCTAssertTrue(CameraInterfaceRotation.matches(expectedAngle: 0, orientation: .landscapeRight))
+        XCTAssertTrue(CameraInterfaceRotation.matches(expectedAngle: 180, orientation: .landscapeLeft))
+        XCTAssertFalse(CameraInterfaceRotation.matches(expectedAngle: 0, orientation: .landscapeLeft))
+        XCTAssertFalse(CameraInterfaceRotation.matches(expectedAngle: 90, orientation: .unknown))
+    }
+
+    func testCaptureSnapshotDecodesLegacyPayloadWithoutZoom() throws {
+        let json = """
+        {
+          "lens": "wide",
+          "rotationAngleDegrees": 90,
+          "requestedMaxPhotoWidth": 4032,
+          "requestedMaxPhotoHeight": 3024,
+          "lensPosition": 0.5,
+          "exposureDurationSeconds": 0.0083333333,
+          "iso": 50,
+          "whiteBalanceRedGain": 1,
+          "whiteBalanceGreenGain": 1,
+          "whiteBalanceBlueGain": 1
+        }
+        """
+
+        let snapshot = try JSONDecoder().decode(
+            CaptureConfigurationSnapshot.self,
+            from: Data(json.utf8)
+        )
+        XCTAssertNil(snapshot.videoZoomFactor)
+    }
+
+    @MainActor
+    func testZoomIsFrozenAfterPhotoOneConfigurationLocks() async throws {
+        let camera = CameraRecorder()
+        try await camera.requestAccessAndConfigure(lens: .wide)
+        camera.setZoomFactor(1.6)
+
+        _ = try await withCheckedThrowingContinuation { continuation in
+            camera.captureSequence(
+                side: .one,
+                count: 1,
+                interfaceRotationAngleDegrees: 90
+            ) { result in
+                continuation.resume(with: result)
+            }
+        }
+
+        XCTAssertEqual(
+            camera.pairConfiguration?.videoZoomFactor ?? -1,
+            1.6,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(camera.pairConfiguration?.rotationAngleDegrees, 90)
+        camera.setZoomFactor(1)
+        XCTAssertEqual(camera.zoomFactor, 1.6, accuracy: 0.001)
+    }
+
     private func makeFrame(width: Int, height: Int, index: Int) -> CapturedFrame {
         CapturedFrame(
             metadata: FrameMetadata(
@@ -54,6 +114,7 @@ final class CaptureModelsTests: XCTestCase {
                 pixelWidth: width,
                 pixelHeight: height,
                 lens: .wide,
+                videoZoomFactor: nil,
                 motion: nil,
                 exposureDurationSeconds: nil,
                 iso: nil,

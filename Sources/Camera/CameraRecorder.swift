@@ -4,6 +4,41 @@ import Combine
 import Foundation
 import UIKit
 
+private struct CameraConfigurationResult: @unchecked Sendable {
+    let device: AVCaptureDevice
+    let maximumZoomFactor: CGFloat
+    let sessionIsRunning: Bool
+}
+
+private final class ZoomRequestBuffer: @unchecked Sendable {
+    struct Request {
+        let device: AVCaptureDevice
+        let factor: CGFloat
+    }
+
+    private let lock = NSLock()
+    private var latest: Request?
+    private var isScheduled = false
+
+    func submit(_ request: Request) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        latest = request
+        guard !isScheduled else { return false }
+        isScheduled = true
+        return true
+    }
+
+    func takeLatest() -> Request? {
+        lock.lock()
+        defer { lock.unlock() }
+        let request = latest
+        latest = nil
+        isScheduled = false
+        return request
+    }
+}
+
 enum CameraRecorderError: LocalizedError {
     case permissionDenied
     case cameraUnavailable
@@ -30,6 +65,8 @@ final class CameraRecorder: NSObject, ObservableObject {
     @Published private(set) var captureProgress = 0
     @Published private(set) var captureTotal = 0
     @Published private(set) var lastError: String?
+    @Published private(set) var zoomFactor: CGFloat = 1
+    @Published private(set) var maximumZoomFactor: CGFloat = 2
     @Published private(set) var pairConfiguration: CaptureConfigurationSnapshot?
     @Published private(set) var captureEvents: [CaptureEvent] = []
 
@@ -41,6 +78,7 @@ final class CameraRecorder: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "com.levelup.groupcam.camera-session")
+    private let zoomRequests = ZoomRequestBuffer()
     private let motionManager = CMMotionManager()
     private let motionBuffer = MotionBuffer()
     private var activeDevice: AVCaptureDevice?
@@ -87,6 +125,8 @@ final class CameraRecorder: NSObject, ObservableObject {
     func requestAccessAndConfigure(lens: CaptureLens) async throws {
         #if targetEnvironment(simulator)
         activeLens = lens
+        zoomFactor = 1
+        maximumZoomFactor = 2
         availableLenses = CaptureLens.allCases
         isConfigured = true
         isRunning = true
@@ -104,19 +144,67 @@ final class CameraRecorder: NSObject, ObservableObject {
         }
 
         guard granted else { throw CameraRecorderError.permissionDenied }
-        try configureSession(lens: lens)
-        startSession()
+        try await configureAndStartSession(lens: lens)
         #endif
     }
 
-    func switchLens(to lens: CaptureLens) throws {
+    func switchLens(to lens: CaptureLens) async throws {
         #if targetEnvironment(simulator)
+        guard pairConfiguration == nil, captureTotal == 0 else { return }
         activeLens = lens
+        zoomFactor = 1
         #else
-        guard !isRunning || pairConfiguration == nil else { return }
-        try configureSession(lens: lens)
+        guard pairConfiguration == nil, captureTotal == 0 else { return }
+        try await configureAndStartSession(lens: lens)
         #endif
     }
+
+    func setZoomFactor(_ requestedFactor: CGFloat) {
+        guard pairConfiguration == nil, captureTotal == 0 else { return }
+        let clamped = min(max(requestedFactor, 1), maximumZoomFactor)
+        #if targetEnvironment(simulator)
+        zoomFactor = clamped
+        #else
+        guard let device = activeDevice else { return }
+        zoomFactor = clamped
+        let request = ZoomRequestBuffer.Request(device: device, factor: clamped)
+        guard zoomRequests.submit(request) else { return }
+        let requests = zoomRequests
+        sessionQueue.asyncAfter(deadline: .now() + .milliseconds(30)) {
+            guard let latest = requests.takeLatest() else { return }
+            do {
+                try latest.device.lockForConfiguration()
+                defer { latest.device.unlockForConfiguration() }
+                latest.device.videoZoomFactor = min(
+                    latest.factor,
+                    latest.device.activeFormat.videoMaxZoomFactor
+                )
+            } catch {
+                // A later gesture update or capture will retry the final zoom.
+            }
+        }
+        #endif
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    func prepareUITestPairConfiguration(rotationAngleDegrees: Double) {
+        activeLens = .wide
+        zoomFactor = 1
+        pairConfiguration = CaptureConfigurationSnapshot(
+            lens: .wide,
+            videoZoomFactor: 1,
+            rotationAngleDegrees: rotationAngleDegrees,
+            requestedMaxPhotoWidth: 4_032,
+            requestedMaxPhotoHeight: 3_024,
+            lensPosition: 0.5,
+            exposureDurationSeconds: 1.0 / 120.0,
+            iso: 50,
+            whiteBalanceRedGain: 1,
+            whiteBalanceGreenGain: 1,
+            whiteBalanceBlueGain: 1
+        )
+    }
+    #endif
 
     func stopSession() {
         let captureSession = session
@@ -132,6 +220,7 @@ final class CameraRecorder: NSObject, ObservableObject {
         pairConfiguration = nil
         captureEvents = []
         motionBuffer.reset()
+        setZoomFactor(1)
     }
 
     var recordedMotionSamples: [MotionSnapshot] { motionBuffer.snapshot() }
@@ -139,6 +228,7 @@ final class CameraRecorder: NSObject, ObservableObject {
     func captureSequence(
         side: CaptureSide,
         count: Int,
+        interfaceRotationAngleDegrees: Double,
         completion: @escaping (Result<[CapturedFrame], Error>) -> Void
     ) {
         guard count > 0 else {
@@ -154,6 +244,21 @@ final class CameraRecorder: NSObject, ObservableObject {
         lastError = nil
 
         #if targetEnvironment(simulator)
+        if side == .one {
+            pairConfiguration = CaptureConfigurationSnapshot(
+                lens: activeLens,
+                videoZoomFactor: Double(zoomFactor),
+                rotationAngleDegrees: interfaceRotationAngleDegrees,
+                requestedMaxPhotoWidth: 4_032,
+                requestedMaxPhotoHeight: 3_024,
+                lensPosition: 0.5,
+                exposureDurationSeconds: 1.0 / 120.0,
+                iso: 50,
+                whiteBalanceRedGain: 1,
+                whiteBalanceGreenGain: 1,
+                whiteBalanceBlueGain: 1
+            )
+        }
         captureFixtureSequence(side: side, count: count)
         #else
         guard isConfigured, session.isRunning else {
@@ -165,7 +270,9 @@ final class CameraRecorder: NSObject, ObservableObject {
             if side == .one {
                 captureEvents = []
                 motionBuffer.reset()
-                pairConfiguration = try lockPairConfiguration()
+                pairConfiguration = try lockPairConfiguration(
+                    rotationAngleDegrees: interfaceRotationAngleDegrees
+                )
                 captureNextPhoto()
             } else {
                 try reapplyPairConfiguration()
@@ -201,61 +308,129 @@ final class CameraRecorder: NSObject, ObservableObject {
         #endif
     }
 
-    private func configureSession(lens: CaptureLens) throws {
+    private func configureAndStartSession(lens: CaptureLens) async throws {
+        let captureSession = session
+        let output = photoOutput
+        let result: CameraConfigurationResult = try await withCheckedThrowingContinuation { continuation in
+            sessionQueue.async {
+                do {
+                    let configured = try Self.configureSessionGraph(
+                        captureSession,
+                        photoOutput: output,
+                        lens: lens
+                    )
+                    if !captureSession.isRunning {
+                        captureSession.startRunning()
+                    }
+                    continuation.resume(
+                        returning: CameraConfigurationResult(
+                            device: configured.device,
+                            maximumZoomFactor: configured.maximumZoomFactor,
+                            sessionIsRunning: captureSession.isRunning
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        activeDevice = result.device
+        activeLens = lens
+        zoomFactor = 1
+        maximumZoomFactor = result.maximumZoomFactor
+        isConfigured = true
+        isRunning = result.sessionIsRunning
+    }
+
+    nonisolated private static func configureSessionGraph(
+        _ session: AVCaptureSession,
+        photoOutput: AVCapturePhotoOutput,
+        lens: CaptureLens
+    ) throws -> CameraConfigurationResult {
         let deviceType: AVCaptureDevice.DeviceType = lens == .wide ? .builtInWideAngleCamera : .builtInUltraWideCamera
         guard let device = AVCaptureDevice.default(deviceType, for: .video, position: .back) else {
             throw CameraRecorderError.cameraUnavailable
         }
 
-        session.beginConfiguration()
-        defer { session.commitConfiguration() }
-        session.sessionPreset = .photo
-
-        for input in session.inputs {
-            session.removeInput(input)
-        }
-        if session.outputs.contains(photoOutput) {
-            session.removeOutput(photoOutput)
-        }
-
         let input = try AVCaptureDeviceInput(device: device)
-        guard session.canAddInput(input), session.canAddOutput(photoOutput) else {
+        let priorVideoInputs = session.inputs.filter { input in
+            guard let deviceInput = input as? AVCaptureDeviceInput else { return false }
+            return deviceInput.device.hasMediaType(.video)
+        }
+        var addedInput = false
+        var addedOutput = false
+        var configured = false
+
+        session.beginConfiguration()
+        defer {
+            if !configured {
+                if addedInput {
+                    session.removeInput(input)
+                }
+                if addedOutput {
+                    session.removeOutput(photoOutput)
+                }
+                for priorInput in priorVideoInputs where session.canAddInput(priorInput) {
+                    session.addInput(priorInput)
+                }
+            }
+            session.commitConfiguration()
+        }
+        if session.canSetSessionPreset(.photo) {
+            session.sessionPreset = .photo
+        }
+
+        for priorInput in priorVideoInputs {
+            session.removeInput(priorInput)
+        }
+        guard session.canAddInput(input) else {
             throw CameraRecorderError.configurationFailed
         }
-
         session.addInput(input)
-        session.addOutput(photoOutput)
+        addedInput = true
 
+        if !session.outputs.contains(photoOutput) {
+            guard session.canAddOutput(photoOutput) else {
+                throw CameraRecorderError.configurationFailed
+            }
+            session.addOutput(photoOutput)
+            addedOutput = true
+        }
+
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        device.videoZoomFactor = 1
+        let maximumZoomFactor = min(max(device.activeFormat.videoMaxZoomFactor, 1), 2)
         if let largest = device.activeFormat.supportedMaxPhotoDimensions.max(by: {
             Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height)
         }) {
             photoOutput.maxPhotoDimensions = largest
         }
-
-        activeDevice = device
-        activeLens = lens
-        isConfigured = true
+        configured = true
+        return CameraConfigurationResult(
+            device: device,
+            maximumZoomFactor: maximumZoomFactor,
+            sessionIsRunning: true
+        )
     }
 
-    private func startSession() {
-        let captureSession = session
-        sessionQueue.async {
-            if !captureSession.isRunning {
-                captureSession.startRunning()
-            }
-        }
-        isRunning = true
-    }
-
-    private func lockPairConfiguration() throws -> CaptureConfigurationSnapshot {
+    private func lockPairConfiguration(
+        rotationAngleDegrees: Double
+    ) throws -> CaptureConfigurationSnapshot {
         guard let device = activeDevice else { throw CameraRecorderError.configurationFailed }
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
 
+        device.videoZoomFactor = min(
+            max(zoomFactor, 1),
+            min(device.activeFormat.videoMaxZoomFactor, maximumZoomFactor)
+        )
         let gains = device.deviceWhiteBalanceGains
         let snapshot = CaptureConfigurationSnapshot(
             lens: activeLens,
-            rotationAngleDegrees: currentRotationAngle(),
+            videoZoomFactor: Double(device.videoZoomFactor),
+            rotationAngleDegrees: rotationAngleDegrees,
             requestedMaxPhotoWidth: photoOutput.maxPhotoDimensions.width,
             requestedMaxPhotoHeight: photoOutput.maxPhotoDimensions.height,
             lensPosition: device.lensPosition,
@@ -280,6 +455,13 @@ final class CameraRecorder: NSObject, ObservableObject {
 
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
+
+        let requestedZoom = CGFloat(snapshot.videoZoomFactor ?? 1)
+        device.videoZoomFactor = min(
+            max(requestedZoom, 1),
+            min(device.activeFormat.videoMaxZoomFactor, maximumZoomFactor)
+        )
+        zoomFactor = device.videoZoomFactor
 
         if device.isExposureModeSupported(.custom) {
             device.setExposureModeCustom(
@@ -357,15 +539,6 @@ final class CameraRecorder: NSObject, ObservableObject {
         motionBuffer.snapshot().last
     }
 
-    private func currentRotationAngle() -> Double {
-        switch UIDevice.current.orientation {
-        case .landscapeLeft: 0
-        case .landscapeRight: 180
-        case .portraitUpsideDown: 270
-        default: 90
-        }
-    }
-
     private func finish(_ result: Result<[CapturedFrame], Error>) {
         let handler = completion
         completion = nil
@@ -398,6 +571,7 @@ final class CameraRecorder: NSObject, ObservableObject {
                         pixelWidth: Int(image?.size.width ?? 0),
                         pixelHeight: Int(image?.size.height ?? 0),
                         lens: activeLens,
+                        videoZoomFactor: Double(zoomFactor),
                         motion: nil,
                         exposureDurationSeconds: 1.0 / 120.0,
                         iso: 50,
@@ -465,6 +639,7 @@ extension CameraRecorder: AVCapturePhotoCaptureDelegate {
                         pixelWidth: Int(image.size.width),
                         pixelHeight: Int(image.size.height),
                         lens: activeLens,
+                        videoZoomFactor: device.map { Double($0.videoZoomFactor) },
                         motion: motionSnapshot(),
                         exposureDurationSeconds: device?.exposureDuration.seconds,
                         iso: device?.iso,

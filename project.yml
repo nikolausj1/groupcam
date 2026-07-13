@@ -41,6 +41,7 @@ targets:
     scheme:
       testTargets:
         - groupCamTests
+        - groupCamUITests
   groupCamTests:
     type: bundle.unit-test
     platform: iOS
@@ -51,4 +52,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.levelup.groupcam.tests
+        GENERATE_INFOPLIST_FILE: YES
+  groupCamUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: groupCam
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.levelup.groupcam.uitests
         GENERATE_INFOPLIST_FILE: YES

@@ -2,7 +2,7 @@
 
 groupCam is an iPhone app that guides two people through taking complementary group photos, then combines the authentic source pixels into one photograph containing everyone.
 
-The current milestone is the Phase 0A capture recorder: physical-lens selection, 1/3/5-frame sequences, capture-state feedback, motion logging, and an onion-skin guide for the second photographer.
+The current milestone is the Phase 0A capture recorder: portrait/landscape camera layouts, Photo 1 lens selection and pinch zoom, locked Photo 2 framing, 1/3/5-frame sequences, capture-state feedback, motion logging, and an onion-skin guide for the second photographer.
 
 ## Build
 

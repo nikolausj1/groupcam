@@ -71,6 +71,7 @@ Complete one row for every minor who appears in either sequence. A parent or leg
 
 - Group-size band: [ ] 2 people  [ ] 3-6 people  [ ] 7-12 people
 - Physical lens: [ ] 1x  [ ] 0.5x
+- Recorded video zoom factor: ______×
 - Orientation: [ ] portrait  [ ] landscape
 - Environment: [ ] indoor  [ ] outdoor
 - Challenge tags: [ ] backlit  [ ] low-detail background  [ ] glasses  [ ] detailed/edge-lit hair  [ ] mild group motion  [ ] alignment boundary

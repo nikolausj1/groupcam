@@ -109,7 +109,7 @@ Google Pixel Add Me and current iPhone competitors validate the need, so the pro
 
 - Native iPhone app built and tuned first on iPhone 16 Pro Max.
 - Guided two-photographer capture on one device.
-- Physical rear 1x camera by default and an optional physical 0.5x camera selected before side one; the selected lens stays locked for both sides.
+- Physical rear 1x camera by default and an optional physical 0.5x camera selected before side one, plus familiar pinch zoom; the exact lens and zoom stay locked for both sides.
 - Portrait and landscape orientation, locked after side one.
 - Three-frame automatic capture sequence per side by default.
 - Debug/test setting for one, three, or five frames per side.
@@ -248,7 +248,7 @@ Before the live preview begins, show the instruction card for at least two secon
 Capture interface requirements:
 
 - Full-bleed rear-camera preview.
-- 1x default and 0.5x option before the first capture only. Hide 0.5x when the device has no physical ultrawide camera.
+- 1x default and 0.5x option before the first capture only. Hide 0.5x when the device has no physical ultrawide camera. Allow pinch zoom before side one, cap digital zoom at 2x per physical lens to protect output quality, show effective magnification separately from the fixed physical-lens labels, and disable both controls after side one.
 - Orientation follows the device until the first sequence begins, then locks for the session.
 - Flash control is absent; low light produces guidance rather than enabling flash.
 - Large tactile shutter control, sequence mode badge (`Auto` or `Single` in public v1), and Help.
@@ -518,6 +518,7 @@ All structured state is local. Use SwiftData for settings/history/session metada
 | `state` | `SessionState` enum | Follows the state machine; transitions are serialized. |
 | `orientation` | enum? | Set before side one; immutable afterward. |
 | `physicalLens` | enum? | `wide1x` or `ultraWide05x`; immutable after side one. |
+| `videoZoomFactor` | number? | Exact per-device zoom factor frozen at side-one sequence start and reapplied to side two. |
 | `captureMode` | enum | `auto`, `single`, or debug-only explicit frame count. |
 | `focusExposureWhiteBalanceLock` | struct? | Captured at side one and reused/validated for side two. |
 | `sideOneLocation`, `sideTwoLocation` | `LocationMetadata?` | Best authorized coordinate at each side's sequence start, including accuracy/approximate status; file-protected, excluded from backup, and deleted with session temporaries. |
