@@ -86,4 +86,3 @@ Complete one row for every minor who appears in either sequence. A parent or leg
 - [ ] Completed consent record is stored with access restricted to the approved reviewers.
 - [ ] No copy remains in Downloads, AirDrop staging, Dropbox, iCloud Drive, `_inbox`, or the repository.
 - [ ] Deletion deadline is entered in the private corpus register.
-
