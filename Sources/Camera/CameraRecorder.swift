@@ -54,10 +54,19 @@ final class CameraRecorder: NSObject, ObservableObject {
         super.init()
         discoverLenses()
         motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
-        let motionBuffer = motionBuffer
-        motionManager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: OperationQueue()) { motion, _ in
+        motionManager.startDeviceMotionUpdates(
+            using: .xArbitraryZVertical,
+            to: OperationQueue(),
+            withHandler: Self.makeMotionHandler(buffer: motionBuffer)
+        )
+    }
+
+    nonisolated private static func makeMotionHandler(
+        buffer: MotionBuffer
+    ) -> CMDeviceMotionHandler {
+        { motion, _ in
             guard let motion else { return }
-            motionBuffer.append(
+            buffer.append(
                 MotionSnapshot(
                     uptime: ProcessInfo.processInfo.systemUptime,
                     roll: motion.attitude.roll,
