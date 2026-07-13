@@ -67,6 +67,20 @@ struct SessionStore {
         try? fileManager.removeItem(at: session.directory)
     }
 
+    func createCorpusArchive(for session: PersistedSession) throws -> URL {
+        let archive = session.directory.appendingPathComponent(
+            "groupCam-\(session.id.uuidString).zip"
+        )
+        try ZipArchiveWriter().write(files: session.shareItems, to: archive)
+        try excludeFromBackup(archive)
+        return archive
+    }
+
+    func deleteCorpusArchive(_ archive: URL?) {
+        guard let archive else { return }
+        try? fileManager.removeItem(at: archive)
+    }
+
     func cleanupExpiredSessions(now: Date = Date()) {
         guard let root = try? sessionsRoot(),
               let directories = try? fileManager.contentsOfDirectory(

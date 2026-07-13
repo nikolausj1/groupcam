@@ -10,6 +10,7 @@ final class RecorderViewModel: ObservableObject {
     @Published var corpusExportConsented = false
     @Published var pair = CapturedPair(sessionID: UUID(), sideOneFrames: [], sideTwoFrames: [])
     @Published var persistedSession: PersistedSession?
+    @Published var corpusArchiveURL: URL?
     @Published var isPreparingCamera = false
     @Published var isCapturing = false
     @Published var message: String?
@@ -31,6 +32,24 @@ final class RecorderViewModel: ObservableObject {
         #else
         false
         #endif
+    }
+
+    func prepareCorpusExport() -> Bool {
+        guard corpusExportConsented, let persistedSession else { return false }
+        store.deleteCorpusArchive(corpusArchiveURL)
+        do {
+            corpusArchiveURL = try store.createCorpusArchive(for: persistedSession)
+            return true
+        } catch {
+            message = "The corpus package could not be created: \(error.localizedDescription)"
+            corpusArchiveURL = nil
+            return false
+        }
+    }
+
+    func finishCorpusExport() {
+        store.deleteCorpusArchive(corpusArchiveURL)
+        corpusArchiveURL = nil
     }
 
     func begin() {
@@ -98,6 +117,7 @@ final class RecorderViewModel: ObservableObject {
     }
 
     func startOver() {
+        finishCorpusExport()
         store.delete(persistedSession)
         persistedSession = nil
         pair = CapturedPair(sessionID: UUID(), sideOneFrames: [], sideTwoFrames: [])

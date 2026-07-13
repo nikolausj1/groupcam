@@ -51,7 +51,7 @@ struct RecorderReviewView: View {
                     Toggle("I have the required written consent", isOn: $model.corpusExportConsented)
                         .tint(GroupCamTheme.safe)
                     Button("Share source package") {
-                        showShareSheet = true
+                        showShareSheet = model.prepareCorpusExport()
                     }
                     .buttonStyle(RaisedButtonStyle(tint: .blue))
                     .disabled(!model.canExportCorpus)
@@ -70,8 +70,11 @@ struct RecorderReviewView: View {
             .padding(24)
         }
         .sheet(isPresented: $showShareSheet) {
-            if let session = model.persistedSession {
-                ShareSheet(items: session.shareItems)
+            if let archive = model.corpusArchiveURL {
+                ShareSheet(items: [archive]) {
+                    showShareSheet = false
+                    model.finishCorpusExport()
+                }
             }
         }
         .alert("Delete this recorded session?", isPresented: $confirmStartOver) {
@@ -110,11 +113,15 @@ private struct SourcePreview: View {
 
 private struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    let completion: () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            completion()
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
-

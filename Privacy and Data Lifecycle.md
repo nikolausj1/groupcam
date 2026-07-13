@@ -57,7 +57,7 @@ On every cold launch, delete abandoned full-resolution sessions, orphaned proxie
 
 The approved corpus root for this Mac is `$HOME/GroupCamPrivateCorpus`. FileVault was verified on at project kickoff, the root and its `incoming`, `development`, `evaluation`, `consent`, and `aggregate` subfolders are owner-only (`0700`), and the path is outside Dropbox and iCloud. Re-verify those properties before the first participant session and after any storage migration.
 
-The public app has no source-image debug export. A debug build may expose **Corpus Export** only after the operator explicitly confirms that the written benchmark consent requirements are satisfied. The export includes source HEIFs, monotonic AVFoundation events, 60 Hz Core Motion samples, and capture metadata. The operator must use the system share sheet to place it directly in the approved encrypted non-cloud Mac location. Never send it through Dropbox, iCloud Drive, `_inbox`, the repository, OpenAI, Gemini, or another cloud AI service.
+The public app has no source-image debug export. A debug build may expose **Corpus Export** only after the operator explicitly confirms that the written benchmark consent requirements are satisfied. It streams the source HEIFs, monotonic AVFoundation events, 60 Hz Core Motion samples, and capture metadata into one uncompressed ZIP package so a session cannot be split accidentally. The operator must use the system share sheet to move that package to the approved encrypted non-cloud Mac location, verify it, and remove any local staging copy. Never send it through Dropbox, iCloud Drive, `_inbox`, the repository, OpenAI, Gemini, or another cloud AI service.
 
 Ordinary debug diagnostics remain image-free and are a separate action.
 

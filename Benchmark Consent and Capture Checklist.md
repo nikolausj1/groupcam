@@ -82,7 +82,7 @@ Complete one row for every minor who appears in either sequence. A parent or leg
 
 - [ ] Session folder is inside the approved non-cloud corpus root.
 - [ ] Folder name uses only the opaque session ID.
-- [ ] Source HEIFs open and the manifest contains capture events and Core Motion samples.
+- [ ] The single ZIP package passes `unzip -t`; its source HEIFs open and the manifest contains capture events and Core Motion samples.
 - [ ] Completed consent record is stored with access restricted to the approved reviewers.
 - [ ] No copy remains in Downloads, AirDrop staging, Dropbox, iCloud Drive, `_inbox`, or the repository.
 - [ ] Deletion deadline is entered in the private corpus register.
