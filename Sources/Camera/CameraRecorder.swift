@@ -397,6 +397,10 @@ final class CameraRecorder: NSObject, ObservableObject {
             session.addOutput(photoOutput)
             addedOutput = true
         }
+        // AVCapturePhotoOutput defaults to `.balanced`. Every per-shot settings
+        // object below requests `.quality`, so raise the output ceiling before
+        // capture; otherwise capturePhoto(with:delegate:) throws on device.
+        photoOutput.maxPhotoQualityPrioritization = .quality
 
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
