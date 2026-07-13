@@ -55,6 +55,8 @@ On every cold launch, delete abandoned full-resolution sessions, orphaned proxie
 
 ## 4. Corpus export boundary
 
+The approved corpus root for this Mac is `$HOME/GroupCamPrivateCorpus`. FileVault was verified on at project kickoff, the root and its `incoming`, `development`, `evaluation`, `consent`, and `aggregate` subfolders are owner-only (`0700`), and the path is outside Dropbox and iCloud. Re-verify those properties before the first participant session and after any storage migration.
+
 The public app has no source-image debug export. A debug build may expose **Corpus Export** only after the operator explicitly confirms that the written benchmark consent requirements are satisfied. The export includes source HEIFs, monotonic AVFoundation events, 60 Hz Core Motion samples, and capture metadata. The operator must use the system share sheet to place it directly in the approved encrypted non-cloud Mac location. Never send it through Dropbox, iCloud Drive, `_inbox`, the repository, OpenAI, Gemini, or another cloud AI service.
 
 Ordinary debug diagnostics remain image-free and are a separate action.
@@ -72,4 +74,3 @@ Run connected privacy cases for clean launch, permission denials, complete 1x/0.
 The gate is zero app-originated image/metadata network requests and zero app-controlled upload bytes containing a photo, thumbnail, EXIF, location, person output, or session identifier. User-directed Share, Apple Photos/iCloud behavior, and Apple-managed StoreKit traffic are excluded from that assertion.
 
 Before release, statically audit for unauthorized URLSession/socket/WebView/telemetry paths, inventory dependencies and privacy manifests, and ensure App Privacy answers match observed behavior. Any new SDK, network capability, broad Photos access, persistent identity analysis, or cloud feature requires Justin's approval and a revised privacy review.
-

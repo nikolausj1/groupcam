@@ -12,6 +12,23 @@ The current milestone is the Phase 0A capture recorder: physical-lens selection,
 
 Camera behavior must be tested on a physical iPhone. The simulator uses generated scene fixtures so navigation and state handling remain testable.
 
+## Reference compositor
+
+The Phase 0B baseline uses committed non-person fixtures and a deterministic background-registration/protected-seam harness:
+
+```bash
+python3 -m unittest discover -s Tests/reference_compositor -v
+python3 -m Tools.reference_compositor.cli \
+  Fixtures/Synthetic/opposite_edges/side_one.png \
+  Fixtures/Synthetic/opposite_edges/side_two.png \
+  /tmp/groupcam-composite.png \
+  --mask-one Fixtures/Synthetic/opposite_edges/protected_side_one.png \
+  --mask-two Fixtures/Synthetic/opposite_edges/protected_side_two.png \
+  --seam-start 0.57 --seam-end 0.69
+```
+
+This is an experiment harness, not the production engine. It establishes measurable registration and seam behavior before any more complex local warp or third-party iOS dependency is selected.
+
 ## Product documents
 
 - `groupCam - PRD.md`
@@ -19,4 +36,3 @@ Camera behavior must be tested on a physical iPhone. The simulator uses generate
 - `Benchmark Protocol and Rubric.md`
 - `Composite Engine Spike Plan.md`
 - `Privacy and Data Lifecycle.md`
-

@@ -1,0 +1,47 @@
+{
+  "description": "Synthetic opposite-edge handoff with a mild projective camera change.",
+  "expected_side_two_to_side_one": [
+    [
+      0.9970681560093968,
+      -0.006025999920953529,
+      -13.910746184763925
+    ],
+    [
+      0.004027947107004604,
+      0.9979477768697206,
+      -8.039973474455829
+    ],
+    [
+      -5.966297147628362e-06,
+      4.0279471070046035e-06,
+      1.0000513045832107
+    ]
+  ],
+  "files": {
+    "ground_truth": "ground_truth_all.png",
+    "ground_truth_mask": "ground_truth_mask.png",
+    "protected_one": "protected_side_one.png",
+    "protected_two": "protected_side_two.png",
+    "side_one": "side_one.png",
+    "side_two": "side_two.png"
+  },
+  "joining_regions": {
+    "photographer_a": [
+      62,
+      350,
+      178,
+      690
+    ],
+    "photographer_b": [
+      987,
+      350,
+      1103,
+      690
+    ]
+  },
+  "schema_version": 1,
+  "seam_search_range": [
+    0.57,
+    0.69
+  ]
+}
