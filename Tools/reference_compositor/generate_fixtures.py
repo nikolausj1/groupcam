@@ -117,6 +117,7 @@ def generate_fixture(output_directory: Path) -> dict[str, object]:
 
     side_one, mask_one = _render({"B", "C", "D", "E"})
     canonical_side_two, canonical_mask_two = _render({"A", "C", "D", "E"})
+    _, canonical_donor_a = _render({"A"})
     ground_truth, ground_truth_mask = _render({"A", "B", "C", "D", "E"})
 
     canonical_to_side_two = transform.ProjectiveTransform(
@@ -131,12 +132,14 @@ def generate_fixture(output_directory: Path) -> dict[str, object]:
     )
     side_two = _warp(canonical_side_two, canonical_to_side_two, is_mask=False)
     mask_two = _warp(canonical_mask_two, canonical_to_side_two, is_mask=True)
+    donor_a = _warp(canonical_donor_a, canonical_to_side_two, is_mask=True)
 
     files = {
         "side_one": "side_one.png",
         "side_two": "side_two.png",
         "protected_one": "protected_side_one.png",
         "protected_two": "protected_side_two.png",
+        "donor_matte": "donor_photographer_a_side_two.png",
         "ground_truth": "ground_truth_all.png",
         "ground_truth_mask": "ground_truth_mask.png",
     }
@@ -144,6 +147,7 @@ def generate_fixture(output_directory: Path) -> dict[str, object]:
     side_two.save(output_directory / files["side_two"])
     mask_one.save(output_directory / files["protected_one"])
     mask_two.save(output_directory / files["protected_two"])
+    donor_a.save(output_directory / files["donor_matte"])
     ground_truth.save(output_directory / files["ground_truth"])
     ground_truth_mask.save(output_directory / files["ground_truth_mask"])
 
@@ -165,6 +169,79 @@ def generate_fixture(output_directory: Path) -> dict[str, object]:
     return manifest
 
 
+def _render_non_vertical_seam_obstacles() -> tuple[Image.Image, Image.Image]:
+    """Render abstract protected zones that require a winding seam.
+
+    The upper zone blocks the left portion of the seam search band while the
+    lower zone blocks the right portion. Their vertical separation leaves a
+    background corridor through which a top-to-bottom seam can move sideways.
+    """
+
+    image = _background(seed=19)
+    mask = Image.new("L", (WIDTH, HEIGHT), 0)
+    draw = ImageDraw.Draw(image)
+    mask_draw = ImageDraw.Draw(mask)
+    obstacles = (
+        ((420, 80, 660, 260), (124, 72, 168)),
+        ((540, 520, 780, 720), (45, 119, 184)),
+    )
+    for bounds, fill in obstacles:
+        draw.rounded_rectangle(bounds, radius=34, fill=fill, outline=(35, 35, 40), width=4)
+        mask_draw.rounded_rectangle(bounds, radius=34, fill=255)
+    return image, mask
+
+
+def generate_non_vertical_seam_fixture(output_directory: Path) -> dict[str, object]:
+    """Generate a synthetic case with no safe straight vertical seam."""
+
+    output_directory.mkdir(parents=True, exist_ok=True)
+    side_one, mask_one = _render_non_vertical_seam_obstacles()
+
+    canonical_to_side_two = transform.ProjectiveTransform(
+        matrix=np.array(
+            [
+                [1.0, 0.0, 8.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+    )
+    side_two = _warp(side_one, canonical_to_side_two, is_mask=False)
+    mask_two = _warp(mask_one, canonical_to_side_two, is_mask=True)
+
+    files = {
+        "side_one": "side_one.png",
+        "side_two": "side_two.png",
+        "protected_one": "protected_side_one.png",
+        "protected_two": "protected_side_two.png",
+    }
+    side_one.save(output_directory / files["side_one"])
+    side_two.save(output_directory / files["side_two"])
+    mask_one.save(output_directory / files["protected_one"])
+    mask_two.save(output_directory / files["protected_two"])
+
+    manifest: dict[str, object] = {
+        "schema_version": 1,
+        "description": (
+            "Synthetic staggered protected zones: every straight vertical seam is blocked, "
+            "but a safe winding background corridor remains."
+        ),
+        "provenance": "Fully synthetic abstract geometry; contains no private source pixels.",
+        "files": files,
+        "expected_side_two_to_side_one": canonical_to_side_two.inverse.params.tolist(),
+        "seam_search_range": [0.35, 0.65],
+        "feather_width": 18,
+        "expected_straight_seam_failure": "noProtectedBackgroundSeam",
+        "minimum_path_horizontal_travel": 120,
+    }
+    (output_directory / "fixture.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -173,8 +250,16 @@ def main() -> None:
         nargs="?",
         default=Path("Fixtures/Synthetic/opposite_edges"),
     )
+    parser.add_argument(
+        "--fixture",
+        choices=("opposite_edges", "non_vertical_seam"),
+        default="opposite_edges",
+    )
     args = parser.parse_args()
-    generate_fixture(args.output_directory)
+    if args.fixture == "non_vertical_seam":
+        generate_non_vertical_seam_fixture(args.output_directory)
+    else:
+        generate_fixture(args.output_directory)
 
 
 if __name__ == "__main__":

@@ -94,3 +94,16 @@ Freeze algorithm choices and thresholds before scoring the pre-registered 30-ses
 
 Exit when the engine runs on iPhone 16 Pro Max, both smoke cases complete without memory failure, reference decisions remain consistent, no protected region is crossed or softened, Photos appearance is acceptable, and the production dependency decision is documented. These smoke cases are diagnostic and do not establish the 30-session p95 performance gate.
 
+## 8. First private diagnostic capture finding
+
+User-directed diagnostic evidence from one private indoor, four-person, 1x landscape session—not admitted to the development corpus and not part of the frozen 30-session gate—established the following. The session remains quarantined until the signed consent record and deletion deadline are verified:
+
+- a worst-face-first selector chose frame 1 from both three-frame sequences; maximizing average face quality alone would have selected a side-one frame containing one materially weaker face;
+- Apple Vision found three visible people per side, correctly reflecting one joining photographer and two people common to both captures;
+- the handoff introduced roughly 5° roll change, 6° yaw change, and a material projective scale change, yet static-background registration remained viable;
+- every straight protected seam was blocked; a curved seam could navigate the people, but the donor footprint boundary still crossed protected subjects and was correctly rejected rather than silently cutting a body;
+- evaluating both donor directions was necessary: one direction placed a donor source boundary through the output interior and failed, while the reverse direction passed that gate;
+- the native on-device 2K pipeline completed on an iPhone 16 Pro Max in 7.13 seconds in a diagnostic build, selected frame 1 on both sides, detected three people on both sides, and chose side two as the base;
+- the result was convincing at fit-to-screen but did not meet the 100%-zoom keeper bar because the scaled Vision instance matte left visible arm/torso and fine-edge artifacts.
+
+Decision: keep native Vision for frame scoring, person-instance discovery, homographic registration, direction selection, and early rejection. Do not label the current output keeper-ready. The next engine experiment is a higher-quality on-device person-matting/refinement stage, measured against hair, arms, clothing, and person-on-person overlap before source-resolution rendering is promoted.

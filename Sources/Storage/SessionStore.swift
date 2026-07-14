@@ -18,8 +18,25 @@ private struct SessionManifest: Codable {
 }
 
 struct SessionStore {
-    private let fileManager = FileManager.default
+    private let fileManager: FileManager
+    private let rootDirectoryOverride: URL?
+    private let dataWriter: (Data, URL, Data.WritingOptions) throws -> Void
     private let sessionTTL: TimeInterval = 2 * 60 * 60
+
+    init(
+        fileManager: FileManager = .default,
+        rootDirectory: URL? = nil,
+        dataWriter: @escaping (Data, URL, Data.WritingOptions) throws -> Void = {
+            data,
+            url,
+            options in
+            try data.write(to: url, options: options)
+        }
+    ) {
+        self.fileManager = fileManager
+        rootDirectoryOverride = rootDirectory
+        self.dataWriter = dataWriter
+    }
 
     func persist(
         pair: CapturedPair,
@@ -29,16 +46,25 @@ struct SessionStore {
     ) throws -> PersistedSession {
         let root = try sessionsRoot()
         let directory = root.appendingPathComponent(pair.sessionID.uuidString, isDirectory: true)
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        try excludeFromBackup(directory)
+        let stagingDirectory = root.appendingPathComponent(
+            ".\(pair.sessionID.uuidString).\(UUID().uuidString).staging",
+            isDirectory: true
+        )
+        try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: false)
+        try excludeFromBackup(stagingDirectory)
+        defer {
+            if fileManager.fileExists(atPath: stagingDirectory.path) {
+                try? fileManager.removeItem(at: stagingDirectory)
+            }
+        }
 
-        var shareItems: [URL] = []
+        var shareItemNames: [String] = []
         for frame in pair.sideOneFrames + pair.sideTwoFrames {
             let name = "side-\(frame.metadata.side.rawValue)-frame-\(String(format: "%02d", frame.metadata.sequenceIndex + 1)).heic"
-            let url = directory.appendingPathComponent(name)
-            try frame.imageData.write(to: url, options: [.atomic, .completeFileProtection])
+            let url = stagingDirectory.appendingPathComponent(name)
+            try dataWriter(frame.imageData, url, [.atomic, .completeFileProtection])
             try excludeFromBackup(url)
-            shareItems.append(url)
+            shareItemNames.append(name)
         }
 
         let manifest = SessionManifest(
@@ -54,10 +80,23 @@ struct SessionStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
-        let manifestURL = directory.appendingPathComponent("manifest.json")
-        try encoder.encode(manifest).write(to: manifestURL, options: [.atomic, .completeFileProtection])
+        let manifestName = "manifest.json"
+        let manifestURL = stagingDirectory.appendingPathComponent(manifestName)
+        try dataWriter(
+            encoder.encode(manifest),
+            manifestURL,
+            [.atomic, .completeFileProtection]
+        )
         try excludeFromBackup(manifestURL)
-        shareItems.append(manifestURL)
+        shareItemNames.append(manifestName)
+
+        if fileManager.fileExists(atPath: directory.path) {
+            _ = try fileManager.replaceItemAt(directory, withItemAt: stagingDirectory)
+        } else {
+            try fileManager.moveItem(at: stagingDirectory, to: directory)
+        }
+
+        let shareItems = shareItemNames.map(directory.appendingPathComponent)
 
         return PersistedSession(id: pair.sessionID, directory: directory, shareItems: shareItems)
     }
@@ -99,13 +138,18 @@ struct SessionStore {
     }
 
     private func sessionsRoot() throws -> URL {
-        let support = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let root = support.appendingPathComponent("groupCam/Sessions", isDirectory: true)
+        let root: URL
+        if let rootDirectoryOverride {
+            root = rootDirectoryOverride
+        } else {
+            let support = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            root = support.appendingPathComponent("groupCam/Sessions", isDirectory: true)
+        }
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         try excludeFromBackup(root)
         return root

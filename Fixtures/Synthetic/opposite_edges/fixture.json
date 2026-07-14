@@ -18,6 +18,7 @@
     ]
   ],
   "files": {
+    "donor_matte": "donor_photographer_a_side_two.png",
     "ground_truth": "ground_truth_all.png",
     "ground_truth_mask": "ground_truth_mask.png",
     "protected_one": "protected_side_one.png",

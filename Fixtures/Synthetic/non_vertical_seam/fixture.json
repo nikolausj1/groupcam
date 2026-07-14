@@ -1,0 +1,35 @@
+{
+  "description": "Synthetic staggered protected zones: every straight vertical seam is blocked, but a safe winding background corridor remains.",
+  "expected_side_two_to_side_one": [
+    [
+      1.0,
+      0.0,
+      -8.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "expected_straight_seam_failure": "noProtectedBackgroundSeam",
+  "feather_width": 18,
+  "files": {
+    "protected_one": "protected_side_one.png",
+    "protected_two": "protected_side_two.png",
+    "side_one": "side_one.png",
+    "side_two": "side_two.png"
+  },
+  "minimum_path_horizontal_travel": 120,
+  "provenance": "Fully synthetic abstract geometry; contains no private source pixels.",
+  "schema_version": 1,
+  "seam_search_range": [
+    0.35,
+    0.65
+  ]
+}

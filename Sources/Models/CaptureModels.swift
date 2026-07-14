@@ -1,5 +1,8 @@
+import CoreGraphics
 import Foundation
+#if canImport(UIKit)
 import UIKit
+#endif
 
 enum CaptureLens: String, CaseIterable, Codable, Identifiable {
     case wide
@@ -38,7 +41,7 @@ enum SequenceLength: Int, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum CaptureSide: String, Codable {
+enum CaptureSide: String, Codable, Sendable {
     case one
     case two
 }
@@ -50,6 +53,7 @@ enum RecorderStep: Equatable {
     case handoff
     case sideTwoAlignment
     case sideTwoCapture
+    case processing
     case review
 }
 
@@ -69,7 +73,7 @@ struct CaptureEvent: Codable, Equatable, Sendable {
     let resolvedSettingsUniqueID: Int64
 }
 
-struct FrameMetadata: Codable, Identifiable, Equatable {
+struct FrameMetadata: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let side: CaptureSide
     let sequenceIndex: Int
@@ -90,15 +94,17 @@ struct FrameMetadata: Codable, Identifiable, Equatable {
     let captureMetadataPropertyList: Data?
 }
 
-struct CapturedFrame: Identifiable {
+struct CapturedFrame: Identifiable, Sendable {
     let metadata: FrameMetadata
     let imageData: Data
 
     var id: UUID { metadata.id }
+    #if canImport(UIKit)
     var image: UIImage? { UIImage(data: imageData) }
+    #endif
 }
 
-struct CapturedPair {
+struct CapturedPair: Sendable {
     let sessionID: UUID
     var sideOneFrames: [CapturedFrame]
     var sideTwoFrames: [CapturedFrame]

@@ -33,6 +33,8 @@ struct RecorderFlowView: View {
                 CaptureView(model: model, side: .two)
             case .sideTwoCapture:
                 CaptureView(model: model, side: .two)
+            case .processing:
+                ProcessingView()
             case .review:
                 RecorderReviewView(model: model)
             }
@@ -53,6 +55,63 @@ struct RecorderFlowView: View {
             Button("Delete Session", role: .destructive) { model.startOver() }
         } message: {
             Text("Temporary source frames and logs for this session will be removed.")
+        }
+    }
+}
+
+private struct ProcessingView: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+            Group {
+                if isLandscape {
+                    HStack(spacing: 30) {
+                        processingMark(size: 116)
+                        processingCopy(alignment: .leading)
+                    }
+                } else {
+                    VStack(spacing: 28) {
+                        processingMark(size: 142)
+                        processingCopy(alignment: .center)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(36)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Building your group photo")
+    }
+
+    private func processingMark(size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(GroupCamTheme.paper)
+                .shadow(color: .black.opacity(0.45), radius: 10, y: 10)
+            Image(systemName: "person.3.sequence.fill")
+                .font(.system(size: size * 0.36, weight: .semibold))
+                .foregroundStyle(GroupCamTheme.ink)
+            ProgressView()
+                .controlSize(.large)
+                .tint(GroupCamTheme.safe)
+                .offset(y: size * 0.37)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func processingCopy(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 10) {
+            Text("BUILDING YOUR GROUP PHOTO")
+                .font(.caption.bold())
+                .tracking(1.6)
+                .foregroundStyle(GroupCamTheme.brass)
+            Text("Finding everyone’s best frame")
+                .font(.largeTitle.bold())
+                .multilineTextAlignment(alignment == .leading ? .leading : .center)
+            Text("groupCam is aligning the background, identifying the two photographers, and checking the result for visible cutoffs. Everything stays on this iPhone.")
+                .foregroundStyle(.white.opacity(0.74))
+                .multilineTextAlignment(alignment == .leading ? .leading : .center)
+                .frame(maxWidth: 560)
         }
     }
 }

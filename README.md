@@ -2,7 +2,7 @@
 
 groupCam is an iPhone app that guides two people through taking complementary group photos, then combines the authentic source pixels into one photograph containing everyone.
 
-The current milestone is the Phase 0A capture recorder: portrait/landscape camera layouts, Photo 1 lens selection and pinch zoom, locked Photo 2 framing, 1/3/5-frame sequences, capture-state feedback, motion logging, and an onion-skin guide for the second photographer.
+The current milestone is the Phase 0B prototype: portrait/landscape capture, Photo 1 lens selection and pinch zoom, locked Photo 2 framing, automatic best-frame selection, on-device person-instance analysis, bidirectional registration/compositing, source-edge rejection, and a cautious result/retake review flow. The composite is currently a 2K-long-edge diagnostic preview; full-resolution rendering and keeper-grade matting remain open work.
 
 ## Build
 
@@ -28,6 +28,18 @@ python3 -m Tools.reference_compositor.cli \
 ```
 
 This is an experiment harness, not the production engine. It establishes measurable registration and seam behavior before any more complex local warp or third-party iOS dependency is selected.
+
+To test the safer single-person insertion path, add a donor mask in side-two coordinates:
+
+```bash
+python3 -m Tools.reference_compositor.cli \
+  Fixtures/Synthetic/opposite_edges/side_one.png \
+  Fixtures/Synthetic/opposite_edges/side_two.png \
+  /tmp/groupcam-donor-composite.png \
+  --mask-one Fixtures/Synthetic/opposite_edges/protected_side_one.png \
+  --mask-two Fixtures/Synthetic/opposite_edges/protected_side_two.png \
+  --donor-instance-mask Fixtures/Synthetic/opposite_edges/donor_photographer_a_side_two.png
+```
 
 ## Product documents
 

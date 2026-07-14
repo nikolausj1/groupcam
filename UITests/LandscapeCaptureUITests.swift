@@ -50,6 +50,37 @@ final class LandscapeCaptureUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Use 1× lens"].isEnabled)
     }
 
+    func testLandscapeProcessingLayoutRemainsReadable() throws {
+        let device = XCUIDevice.shared
+        device.orientation = .landscapeLeft
+        defer { device.orientation = .portrait }
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoProcessing"]
+        app.launchEnvironment["GROUPCAM_UI_TESTING"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["BUILDING YOUR GROUP PHOTO"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Finding everyone’s best frame"].exists)
+        XCTAssertTrue(app.buttons["Cancel"].isHittable)
+    }
+
+    func testLandscapeReviewShowsPrototypeResultAndActions() throws {
+        let device = XCUIDevice.shared
+        device.orientation = .landscapeRight
+        defer { device.orientation = .portrait }
+
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoReview"]
+        app.launchEnvironment["GROUPCAM_UI_TESTING"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["PROTOTYPE COMPOSITE"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Combined group photo preview"].exists)
+        XCTAssertTrue(app.buttons["Share result"].isHittable)
+        XCTAssertTrue(app.buttons["Retake Photo 2"].isHittable)
+    }
+
     private func verifyCaptureLayout(
         in landscapeOrientation: UIDeviceOrientation,
         keepsScreenshot: Bool

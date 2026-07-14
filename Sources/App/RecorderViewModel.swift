@@ -12,14 +12,18 @@ final class RecorderViewModel: ObservableObject {
     @Published var corpusExportConsented = false
     @Published var pair = CapturedPair(sessionID: UUID(), sideOneFrames: [], sideTwoFrames: [])
     @Published var persistedSession: PersistedSession?
+    @Published var compositeOutput: CompositeOutput?
     @Published var corpusArchiveURL: URL?
     @Published var isPreparingCamera = false
     @Published var isChangingLens = false
     @Published var isCapturing = false
+    @Published var isCompositing = false
     @Published var message: String?
 
     let camera = CameraRecorder()
     private let store = SessionStore()
+    private let compositor = GroupPhotoCompositor()
+    private var compositingTask: Task<Void, Never>?
 
     init() {
         store.cleanupExpiredSessions()
@@ -36,6 +40,13 @@ final class RecorderViewModel: ObservableObject {
             camera.prepareUITestPairConfiguration(rotationAngleDegrees: rotation)
             everyoneConsented = true
             step = .sideTwoAlignment
+        } else if arguments.contains("-demoProcessing"),
+                  environment["GROUPCAM_UI_TESTING"] == "1" {
+            step = .processing
+        } else if arguments.contains("-demoReview"),
+                  environment["GROUPCAM_UI_TESTING"] == "1" {
+            compositeOutput = Self.demoCompositeOutput()
+            step = .review
         }
         #endif
     }
@@ -170,7 +181,7 @@ final class RecorderViewModel: ObservableObject {
                             captureEvents: camera.captureEvents,
                             motionSamples: camera.recordedMotionSamples
                         )
-                        step = .review
+                        processCapturedPair()
                     } catch {
                         message = "The captures succeeded, but the protected session package could not be written: \(error.localizedDescription)"
                     }
@@ -182,19 +193,84 @@ final class RecorderViewModel: ObservableObject {
     }
 
     func repeatSideTwo() {
+        compositingTask?.cancel()
+        store.delete(persistedSession)
+        persistedSession = nil
+        compositeOutput = nil
+        isCompositing = false
         pair.sideTwoFrames = []
         step = .sideTwoAlignment
     }
 
+    func retryComposite() {
+        processCapturedPair()
+    }
+
     func startOver() {
+        compositingTask?.cancel()
         finishCorpusExport()
         store.delete(persistedSession)
         persistedSession = nil
         pair = CapturedPair(sessionID: UUID(), sideOneFrames: [], sideTwoFrames: [])
+        compositeOutput = nil
+        isCompositing = false
         camera.resetPairConfiguration()
         digitalZoomFactor = camera.zoomFactor
         corpusExportConsented = false
         message = nil
         step = .setup
     }
+
+    private func processCapturedPair() {
+        let sessionID = pair.sessionID
+        let capturedPair = pair
+        compositeOutput = nil
+        message = nil
+        isCompositing = true
+        step = .processing
+        compositingTask?.cancel()
+        compositingTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let output = try await compositor.composite(pair: capturedPair)
+                guard !Task.isCancelled, pair.sessionID == sessionID else { return }
+                compositeOutput = output
+            } catch {
+                guard !Task.isCancelled, pair.sessionID == sessionID else { return }
+                message = error.localizedDescription
+            }
+            guard pair.sessionID == sessionID else { return }
+            isCompositing = false
+            step = .review
+        }
+    }
+
+    #if DEBUG
+    private static func demoCompositeOutput() -> CompositeOutput {
+        let size = CGSize(width: 1_200, height: 800)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor(red: 0.18, green: 0.25, blue: 0.28, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let symbol = UIImage(systemName: "person.3.fill")?.withTintColor(
+                .white,
+                renderingMode: .alwaysOriginal
+            )
+            symbol?.draw(in: CGRect(x: 450, y: 250, width: 300, height: 300))
+        }
+        return CompositeOutput(
+            jpegData: data,
+            diagnostics: CompositeDiagnostics(
+                baseSide: .two,
+                selectedSideOneIndex: 0,
+                selectedSideTwoIndex: 0,
+                sideOnePeople: 3,
+                sideTwoPeople: 3,
+                registrationConfidence: 1,
+                missingPersonOverlap: 0,
+                donorTouchesOutputEdge: false
+            )
+        )
+    }
+    #endif
 }

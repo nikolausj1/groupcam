@@ -1,4 +1,5 @@
 import XCTest
+import simd
 @testable import groupCam
 
 final class CaptureModelsTests: XCTestCase {
@@ -42,6 +43,108 @@ final class CaptureModelsTests: XCTestCase {
         XCTAssertEqual(pair.provisionalSideOne?.id, larger.id)
     }
 
+    func testRepersistingSessionRemovesStaleRetakeFrames() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = SessionStore(rootDirectory: root)
+        var pair = CapturedPair(
+            sessionID: UUID(),
+            sideOneFrames: [makeFrame(width: 10, height: 10, index: 0)],
+            sideTwoFrames: (0..<5).map {
+                makeFrame(width: 10, height: 10, index: $0, side: .two)
+            }
+        )
+        var session: PersistedSession?
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        session = try store.persist(
+            pair: pair,
+            configuration: nil,
+            captureEvents: [],
+            motionSamples: []
+        )
+        pair.sideTwoFrames = Array(pair.sideTwoFrames.prefix(3))
+        session = try store.persist(
+            pair: pair,
+            configuration: nil,
+            captureEvents: [],
+            motionSamples: []
+        )
+
+        let files = try FileManager.default.contentsOfDirectory(
+            at: try XCTUnwrap(session?.directory),
+            includingPropertiesForKeys: nil
+        ).map(\.lastPathComponent)
+        XCTAssertFalse(files.contains("side-two-frame-04.heic"))
+        XCTAssertFalse(files.contains("side-two-frame-05.heic"))
+    }
+
+    func testPersistFailurePreservesPreviousSessionAndCleansStagingDirectory() throws {
+        enum ExpectedFailure: Error {
+            case injected
+        }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sessionID = UUID()
+        let originalPair = CapturedPair(
+            sessionID: sessionID,
+            sideOneFrames: [makeFrame(width: 10, height: 10, index: 0)],
+            sideTwoFrames: (0..<5).map {
+                makeFrame(width: 10, height: 10, index: $0, side: .two)
+            }
+        )
+        let store = SessionStore(rootDirectory: root)
+        let originalSession = try store.persist(
+            pair: originalPair,
+            configuration: nil,
+            captureEvents: [],
+            motionSamples: []
+        )
+        let originalFiles = try FileManager.default.contentsOfDirectory(
+            at: originalSession.directory,
+            includingPropertiesForKeys: nil
+        ).map(\.lastPathComponent).sorted()
+
+        let failingStore = SessionStore(rootDirectory: root) { _, url, _ in
+            if url.lastPathComponent == "side-two-frame-02.heic" {
+                throw ExpectedFailure.injected
+            }
+            try Data("staged".utf8).write(to: url, options: .atomic)
+        }
+        let retakePair = CapturedPair(
+            sessionID: sessionID,
+            sideOneFrames: originalPair.sideOneFrames,
+            sideTwoFrames: Array(originalPair.sideTwoFrames.prefix(3))
+        )
+
+        XCTAssertThrowsError(
+            try failingStore.persist(
+                pair: retakePair,
+                configuration: nil,
+                captureEvents: [],
+                motionSamples: []
+            )
+        ) { error in
+            XCTAssertTrue(error is ExpectedFailure)
+        }
+
+        let filesAfterFailure = try FileManager.default.contentsOfDirectory(
+            at: originalSession.directory,
+            includingPropertiesForKeys: nil
+        ).map(\.lastPathComponent).sorted()
+        XCTAssertEqual(filesAfterFailure, originalFiles)
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: nil
+            ).map(\.lastPathComponent),
+            [sessionID.uuidString]
+        )
+    }
+
     func testCameraPreviewRotationMatchesInterfaceOrientation() {
         XCTAssertEqual(CameraInterfaceRotation.angle(for: .portrait), 90)
         XCTAssertEqual(CameraInterfaceRotation.angle(for: .landscapeRight), 0)
@@ -51,6 +154,34 @@ final class CaptureModelsTests: XCTestCase {
         XCTAssertTrue(CameraInterfaceRotation.matches(expectedAngle: 180, orientation: .landscapeLeft))
         XCTAssertFalse(CameraInterfaceRotation.matches(expectedAngle: 0, orientation: .landscapeLeft))
         XCTAssertFalse(CameraInterfaceRotation.matches(expectedAngle: 90, orientation: .unknown))
+    }
+
+    func testHomographyPlausibilityAcceptsNormalHandoffTransform() {
+        let matrix = simd_float3x3(columns: (
+            SIMD3<Float>(1, 0, 0),
+            SIMD3<Float>(0, 1, 0),
+            SIMD3<Float>(40, -50, 1)
+        ))
+        XCTAssertTrue(
+            GroupPhotoCompositor.alignmentIsPlausible(
+                matrix: matrix,
+                extent: CGRect(x: 0, y: 0, width: 2_016, height: 1_512)
+            )
+        )
+    }
+
+    func testHomographyPlausibilityRejectsDegenerateTransform() {
+        let matrix = simd_float3x3(columns: (
+            SIMD3<Float>(1, 0, 0),
+            SIMD3<Float>(0, 1, 0),
+            SIMD3<Float>(100_000, 100_000, 0.001)
+        ))
+        XCTAssertFalse(
+            GroupPhotoCompositor.alignmentIsPlausible(
+                matrix: matrix,
+                extent: CGRect(x: 0, y: 0, width: 2_016, height: 1_512)
+            )
+        )
     }
 
     func testCaptureSnapshotDecodesLegacyPayloadWithoutZoom() throws {
@@ -102,11 +233,16 @@ final class CaptureModelsTests: XCTestCase {
         XCTAssertEqual(camera.zoomFactor, 1.6, accuracy: 0.001)
     }
 
-    private func makeFrame(width: Int, height: Int, index: Int) -> CapturedFrame {
+    private func makeFrame(
+        width: Int,
+        height: Int,
+        index: Int,
+        side: CaptureSide = .one
+    ) -> CapturedFrame {
         CapturedFrame(
             metadata: FrameMetadata(
                 id: UUID(),
-                side: .one,
+                side: side,
                 sequenceIndex: index,
                 shutterIntentUptime: 1,
                 callbackUptime: 2,

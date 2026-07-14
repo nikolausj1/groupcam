@@ -6,7 +6,14 @@ import argparse
 import json
 from pathlib import Path
 
-from .engine import composite_pair, load_mask, load_rgb, save_rgb
+from .engine import (
+    composite_donor_instance,
+    composite_pair,
+    load_alpha,
+    load_mask,
+    load_rgb,
+    save_rgb,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("output", type=Path)
     parser.add_argument("--mask-one", type=Path)
     parser.add_argument("--mask-two", type=Path)
+    parser.add_argument(
+        "--donor-instance-mask",
+        type=Path,
+        help="Insert this side-two person matte into side one instead of using a full-frame seam.",
+    )
     parser.add_argument("--debug-overlay", type=Path)
     parser.add_argument("--metrics", type=Path)
     parser.add_argument("--seam-start", type=float, default=0.32)
@@ -29,14 +41,25 @@ def main() -> None:
     side_one = load_rgb(args.side_one)
     side_two = load_rgb(args.side_two)
     shape = side_one.shape[:2]
-    result = composite_pair(
-        side_one,
-        side_two,
-        protected_one=load_mask(args.mask_one, shape),
-        protected_two=load_mask(args.mask_two, shape),
-        search_range=(args.seam_start, args.seam_end),
-        feather_width=args.feather,
-    )
+    protected_one = load_mask(args.mask_one, shape)
+    protected_two = load_mask(args.mask_two, shape)
+    if args.donor_instance_mask:
+        result = composite_donor_instance(
+            side_one,
+            side_two,
+            donor_matte=load_alpha(args.donor_instance_mask, shape),
+            protected_one=protected_one,
+            protected_two=protected_two,
+        )
+    else:
+        result = composite_pair(
+            side_one,
+            side_two,
+            protected_one=protected_one,
+            protected_two=protected_two,
+            search_range=(args.seam_start, args.seam_end),
+            feather_width=args.feather,
+        )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     save_rgb(args.output, result.image)
